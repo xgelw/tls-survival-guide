@@ -6,3 +6,6 @@ This documentation shall help to diagnose TLS connection setup issues in a syste
 
 Where appropriate, this documentation will show snippets how to use OpenSSL, nmap or network traces to identify configurations of either the server side or client. Please keep in mind that the main objective of TLS is to establish confidentiality and integrity. So at some point of time "looking at the wire" won't reveal anything anymore. This is even more true with TLS 1.3 where the handshake is also encrypted and even less information can be retrieved from the initial connection setup.
 
+A word of warning: this guide won't provide you with the magic-bullet-script which will resolve all your TLS connection issues - you'll have to verify configurations and information you receive from your endpoints. All these configurations are specific to the tools/libraries/software you are using. The magic bullet will be your analytical skills. After all there are not too many things that can go wrong when using TLS ;)
+
+
