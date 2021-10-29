@@ -4,8 +4,133 @@ When a TLS connection is setup various checks are done by the TLS server as well
 
 This documentation shall help to diagnose TLS connection setup issues in a systematic way by verifying configurations on the server and client side.
 
-Where appropriate, this documentation will show snippets how to use OpenSSL, nmap or network traces to identify configurations of either the server side or client. Please keep in mind that the main objective of TLS is to establish confidentiality and integrity. So at some point of time "looking at the wire" won't reveal anything anymore. This is even more true with TLS 1.3 where the handshake is also encrypted and even less information can be retrieved from the initial connection setup.
+Where appropriate, this documentation will show snippets how to use OpenSSL, nmap, sslscan2, tcpdump or network traces to identify configurations of either the server side or client. Please keep in mind that the main objective of TLS is to establish confidentiality and integrity. So at some point of time "looking at the wire" won't reveal anything anymore. This is even more true with TLS 1.3 where the handshake is also encrypted and even less information can be retrieved from the initial connection setup.
 
 A word of warning: this guide won't provide you with the magic-bullet-script which will resolve all your TLS connection issues - you'll have to verify configurations and information you receive from your endpoints. All these configurations are specific to the tools/libraries/software you are using. The magic bullet will be your analytical skills. After all there are not too many things that can go wrong when using TLS ;)
 
+* Diagnosing Connection Setup Issues Along the TLS Handshake
 
+** Client Hello
+
+The client initiates the TCP connection towards the server and once established sends the "Client Hello".
+
+Verifications done on server side:
+
+*** TLS Version
+
+The client sends the supported (SSL) TLS versions as part of the handshake. The server will verify if there is an overlap with supported TLS versions configured on the server side.
+
+In case there are is no overlap in the supported (SSL) TLS version, the server will tell the client that the handshake failed.
+
+Verify that the client and server have an overlap in the supported (SSL) TLS versions.
+
+For TLS <= 1.2 the following command can be used to list the TLS versions supported by the server:
+
+#+begin_src sh
+nmap -sV --script ssl-enum-ciphers -p $PORT $SERVER
+#+end_src
+
+In case you want to test if TLS 1.3 is supported as well, then issue the following command:
+
+#+begin_src sh
+openssl s_client -no_ssl3 -no_tls1 -no_tls1_1 -no_tls1_2 -connect $SERVER:$PORT -servername $SERVER
+#+end_src
+
+*** Ciphers
+
+Similar to the TLS version the client will also send a list of supported ciphers. The TLS server will verify if there is an overlap with the supported ciphers configured on server side. In cases there is no overlap, the server will tell the client that the handshake failed.
+
+You can probe which ciphers are supported by the server, by probing the TLS server with all the ciphers supported by your OpenSSL client:
+
+ #+begin_src sh
+function testCiphers() {
+  SERVER=$1
+  PORT=$2
+  SERVERNAME="${3:-$SERVER}"
+  declare -a TLS_VER=( "tls1" "tls1_1" "tls1_2" "tls1_3" )
+  for TLS in ${TLS_VER[@]}; do
+    echo "Testing TLS: ${TLS}"
+    SUPPORTED_CIPHERS=$(openssl ciphers -s -${TLS} "ALL:eNULL" | sed -e 's/:/ /g')
+    for CIPHER in ${SUPPORTED_CIPHERS[@]}; do
+      echo -n "TLS: ${TLS} - cipher: ${CIPHER}"
+      CIPHER_COMMAND="-cipher"
+      if [[ "${TLS}" == "tls1_3" ]]; then
+        CIPHER_COMMAND="-ciphersuites"
+      fi
+      OPENSSL_OUTPUT=$(openssl s_client -connect $SERVER:$PORT -servername $SERVERNAME -${TLS} $CIPHER_COMMAND $CIPHER < /dev/null 2>&1)
+      if [[ $? -eq 0 ]]; then
+        echo " - Successful"
+      else
+        ERROR_INFO=$()
+        echo " - Failed; $(echo "${OPENSSL_OUTPUT}" | head -n 1 | awk -F : '{print $NF}')"
+      fi
+      sleep 1
+    done
+  done
+}
+ #+end_src
+
+You can lookup any reported error codes at the RFC [https://datatracker.ietf.org/doc/html/rfc8446#appendix-B.2]
+
+Please note that the above test may miss supported ciphers as your client is probing only for ciphers supported by your client whereas the target server may support more than your client.
+
+In order to see which ciphers are supported by the client, you'll have to take a network capture and then analyze it using Wireshark (or tshark if you prefer the command line).
+
+Capture a TLS handshake as follows (make sure that the environment variables for ~SERVER~ and ~PORT~ are set):
+
+#+begin_src sh
+tcpdump -a any -s 65565 -o client_hello.pcap "tcp and host ${SERVER} and port ${PORT}"
+#+end_src
+
+Now initiate the connection from your client. And once done, press stop the network capture.
+
+You can inspect the supported ciphersuites sent by the client as follows:
+
+#+begin_src sh
+tshark -2 -r client_hello.pcap --enable-protocol tls -R "ssl" -T text -V | egrep "Cipher Suite[s]?|Version: TLS"
+#+end_src
+
+which will produce:
+
+#+begin_example
+Version: TLS 1.0 (0x0301)
+    Version: TLS 1.2 (0x0303)
+    Cipher Suites Length: 56
+    Cipher Suites (28 suites)
+        Cipher Suite: TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384 (0xc02c)
+        Cipher Suite: TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384 (0xc030)
+        Cipher Suite: TLS_DHE_RSA_WITH_AES_256_GCM_SHA384 (0x009f)
+        Cipher Suite: TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256 (0xcca9)
+        Cipher Suite: TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256 (0xcca8)
+        Cipher Suite: TLS_DHE_RSA_WITH_CHACHA20_POLY1305_SHA256 (0xccaa)
+        Cipher Suite: TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256 (0xc02b)
+        Cipher Suite: TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256 (0xc02f)
+        Cipher Suite: TLS_DHE_RSA_WITH_AES_128_GCM_SHA256 (0x009e)
+        Cipher Suite: TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA384 (0xc024)
+        Cipher Suite: TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA384 (0xc028)
+        Cipher Suite: TLS_DHE_RSA_WITH_AES_256_CBC_SHA256 (0x006b)
+        Cipher Suite: TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA256 (0xc023)
+        Cipher Suite: TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA256 (0xc027)
+        Cipher Suite: TLS_DHE_RSA_WITH_AES_128_CBC_SHA256 (0x0067)
+        Cipher Suite: TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA (0xc00a)
+        Cipher Suite: TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA (0xc014)
+        Cipher Suite: TLS_DHE_RSA_WITH_AES_256_CBC_SHA (0x0039)
+        Cipher Suite: TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA (0xc009)
+        Cipher Suite: TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA (0xc013)
+        Cipher Suite: TLS_DHE_RSA_WITH_AES_128_CBC_SHA (0x0033)
+        Cipher Suite: TLS_RSA_WITH_AES_256_GCM_SHA384 (0x009d)
+        Cipher Suite: TLS_RSA_WITH_AES_128_GCM_SHA256 (0x009c)
+        Cipher Suite: TLS_RSA_WITH_AES_256_CBC_SHA256 (0x003d)
+        Cipher Suite: TLS_RSA_WITH_AES_128_CBC_SHA256 (0x003c)
+        Cipher Suite: TLS_RSA_WITH_AES_256_CBC_SHA (0x0035)
+        Cipher Suite: TLS_RSA_WITH_AES_128_CBC_SHA (0x002f)
+        Cipher Suite: TLS_EMPTY_RENEGOTIATION_INFO_SCSV (0x00ff)
+#+end_example
+
+/...to be continued.../
+
+*** Lack of TLS SNI Support by Client
+
+*** Incorrect TLS SNI Servername sent by Client
+
+*** Incorrect Configuration of TLS SNI on the Server 
