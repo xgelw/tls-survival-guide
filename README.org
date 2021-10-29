@@ -133,10 +133,47 @@ Version: TLS 1.0 (0x0301)
         Cipher Suite: TLS_EMPTY_RENEGOTIATION_INFO_SCSV (0x00ff)
 #+end_example
 
+*** TLS SNI Handling
+
+TLS SNI allows a TLS server to present different certificates to a client based ot the server name the client used to connect to the server (or more correct: based on the server name the client put into the TLS SNI field in the Client Hello). In case the TLS server receives a Client Hello without a TLS SNI header, then it might happen that the server will terminate the session (whereas the server then usually uses a default configuration). See [[https://datatracker.ietf.org/doc/html/rfc6066#section-3]].
+
+TLS SNI is usually supported by clients.
+
+In case the client receives a ServerHello back with a different certificate than expected, then:
+- verify if the server has the (virtual) hosts based on TLS SNI properly configured or
+- verify if the cliens supports TLS SNI and the correct server name has been set.
+
+You can use OpenSSL s_client to see how the TLS server responds in case of specific server names send in the TLS SNI extension like so:
+
+#+begin_src sh
+openssl s_client -connect $SERVER:$PORT -servername YOUR_RANDOM_TLS_SNI_SERVER_NAME
+#+end_src
+
+In order to see if the client sends a TLS SNI extension, you can inspect a network capture using Wireshark or tshark:
+
+#+begin_src sh
+tshark -2 -r client_hello.pcap --enable-protocol tls -R "ssl" -T text -V | egrep "server_name|Server Name"
+#+end_src
+
+which will show the server name ~foobar~ is included in the TLS SNI extension:
+
+#+begin_example
+Extension: server_name (len=11)
+    Type: server_name (0)
+    Server Name Indication extension
+        Server Name list length: 9
+        Server Name Type: host_name (0)
+        Server Name length: 6
+        Server Name: foobar
+#+end_example
+
+In case your client supports encrypted SNI (ESNI) make sure, that the DNS records are properly setup:
+
+#+begin_src sh
+dig _esni.crypto.dance TXT +short $SERVER
+#+end_src
+
+Please note, that OpenSSL doesn't support ESNI. Full handshake encryption (ECH) is preferred over ESNI. You can read more about ESNI and ECH it here: [[https://blog.cloudflare.com/encrypted-client-hello/]].
+
+
 /...to be continued.../
-
-*** Lack of TLS SNI Support by Client
-
-*** Incorrect TLS SNI Servername sent by Client
-
-*** Incorrect Configuration of TLS SNI on the Server 
