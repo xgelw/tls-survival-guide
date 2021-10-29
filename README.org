@@ -76,7 +76,7 @@ In order to test the ciphers supported by the target server, use the function as
 testCiphers $SERVER $PORT
 #+end_src
 
-You can lookup any reported error codes at the RFC [https://datatracker.ietf.org/doc/html/rfc8446#appendix-B.2]
+You can lookup any reported error codes at the RFC [[https://datatracker.ietf.org/doc/html/rfc8446#appendix-B.2]]
 
 Please note that the above test may miss supported ciphers as your client is probing only for ciphers supported by your client whereas the target server may support more than your client.
 
@@ -85,7 +85,7 @@ In order to see which ciphers are supported by the client, you'll have to take a
 Capture a TLS handshake as follows (make sure that the environment variables for ~SERVER~ and ~PORT~ are set):
 
 #+begin_src sh
-tcpdump -a any -s 65565 -o client_hello.pcap "tcp and host ${SERVER} and port ${PORT}"
+tcpdump -i any -s 65565 -o client_hello.pcap "tcp and host ${SERVER} and port ${PORT}"
 #+end_src
 
 Now initiate the connection from your client. And once done, press stop the network capture.
@@ -105,30 +105,7 @@ Version: TLS 1.0 (0x0301)
     Cipher Suites (28 suites)
         Cipher Suite: TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384 (0xc02c)
         Cipher Suite: TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384 (0xc030)
-        Cipher Suite: TLS_DHE_RSA_WITH_AES_256_GCM_SHA384 (0x009f)
-        Cipher Suite: TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256 (0xcca9)
-        Cipher Suite: TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256 (0xcca8)
-        Cipher Suite: TLS_DHE_RSA_WITH_CHACHA20_POLY1305_SHA256 (0xccaa)
-        Cipher Suite: TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256 (0xc02b)
-        Cipher Suite: TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256 (0xc02f)
-        Cipher Suite: TLS_DHE_RSA_WITH_AES_128_GCM_SHA256 (0x009e)
-        Cipher Suite: TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA384 (0xc024)
-        Cipher Suite: TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA384 (0xc028)
-        Cipher Suite: TLS_DHE_RSA_WITH_AES_256_CBC_SHA256 (0x006b)
-        Cipher Suite: TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA256 (0xc023)
-        Cipher Suite: TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA256 (0xc027)
-        Cipher Suite: TLS_DHE_RSA_WITH_AES_128_CBC_SHA256 (0x0067)
-        Cipher Suite: TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA (0xc00a)
-        Cipher Suite: TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA (0xc014)
-        Cipher Suite: TLS_DHE_RSA_WITH_AES_256_CBC_SHA (0x0039)
-        Cipher Suite: TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA (0xc009)
-        Cipher Suite: TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA (0xc013)
-        Cipher Suite: TLS_DHE_RSA_WITH_AES_128_CBC_SHA (0x0033)
-        Cipher Suite: TLS_RSA_WITH_AES_256_GCM_SHA384 (0x009d)
-        Cipher Suite: TLS_RSA_WITH_AES_128_GCM_SHA256 (0x009c)
-        Cipher Suite: TLS_RSA_WITH_AES_256_CBC_SHA256 (0x003d)
-        Cipher Suite: TLS_RSA_WITH_AES_128_CBC_SHA256 (0x003c)
-        Cipher Suite: TLS_RSA_WITH_AES_256_CBC_SHA (0x0035)
+...
         Cipher Suite: TLS_RSA_WITH_AES_128_CBC_SHA (0x002f)
         Cipher Suite: TLS_EMPTY_RENEGOTIATION_INFO_SCSV (0x00ff)
 #+end_example
@@ -140,8 +117,8 @@ TLS SNI allows a TLS server to present different certificates to a client based 
 TLS SNI is usually supported by clients.
 
 In case the client receives a ServerHello back with a different certificate than expected, then:
-- verify if the server has the (virtual) hosts based on TLS SNI properly configured or
-- verify if the cliens supports TLS SNI and the correct server name has been set.
+- verify if the server has the (virtual) host based on TLS SNI properly configured or
+- verify if the client supports TLS SNI and the correct server name has been set.
 
 You can use OpenSSL s_client to see how the TLS server responds in case of specific server names send in the TLS SNI extension like so:
 
@@ -173,7 +150,7 @@ In case your client supports encrypted SNI (ESNI) make sure, that the DNS record
 dig _esni.crypto.dance TXT +short $SERVER
 #+end_src
 
-Please note, that OpenSSL doesn't support ESNI. Full handshake encryption (ECH) is preferred over ESNI. You can read more about ESNI and ECH it here: [[https://blog.cloudflare.com/encrypted-client-hello/]].
+Please note, that OpenSSL doesn't support ESNI. Full handshake encryption (ECH) is preferred over ESNI. You can read more about ESNI and ECH here: [[https://blog.cloudflare.com/encrypted-client-hello/]].
 
 
 /...to be continued.../
