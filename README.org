@@ -6,10 +6,9 @@ This documentation shall help to diagnose TLS connection setup issues in a syste
 
 Where appropriate, this documentation will show snippets how to use OpenSSL, nmap, sslscan2, tcpdump or network traces to identify configurations of either the server side or client. Please keep in mind that the main objective of TLS is to establish confidentiality and integrity. So at some point of time "looking at the wire" won't reveal anything anymore. This is even more true with TLS 1.3 in case the handshake is also encrypted (ECH) and even less information can be retrieved from the initial connection setup.
 
-A word of warning: this guide won't provide you with the magic-bullet-script which will resolve all your TLS connection issues - you'll have to verify configurations and information you receive from your endpoints. All these configurations are specific to the tools/libraries/software you are using. The magic bullet will be your analytical skills. After all there are not too many things that can go wrong when using TLS ;)
+A word of warning: this guide won't provide you with the magic-bullet-script which will resolve all your TLS connection issues - you'll have to verify configurations and information you receive from your endpoints. All these configurations are specific to the tools/libraries/software you are using. The magic bullet will be your analytical skills. After all there are not too many things that can go wrong when using TLS ;) Please also note that this guide will focus mostly on things which can go wrong due to incorrect configuration of the TLS server and TLS client.
 
 * Diagnosing Connection Setup Issues Along the TLS Handshake
-
 ** Client Hello
 
 The client initiates the TCP connection towards the server and once established sends the "Client Hello".
@@ -43,7 +42,7 @@ Similar to the TLS version the client will also send a list of supported ciphers
 You can probe which ciphers are supported by the server, by probing the TLS server with all the ciphers supported by your OpenSSL client:
 
  #+begin_src sh
-function testCiphers() {
+function tlsTestCiphers() {
   SERVER=$1
   PORT=$2
   SERVERNAME="${3:-$SERVER}"
@@ -73,7 +72,7 @@ function testCiphers() {
 In order to test the ciphers supported by the target server, use the function as follows:
 
 #+begin_src sh
-testCiphers $SERVER $PORT
+tlsTestCiphers $SERVER $PORT
 #+end_src
 
 You can lookup any reported error codes at the RFC [[https://datatracker.ietf.org/doc/html/rfc8446#appendix-B.2]]
@@ -152,5 +151,93 @@ dig _esni.crypto.dance TXT +short $SERVER
 
 Please note, that OpenSSL doesn't support ESNI. Full handshake encryption (ECH) is preferred over ESNI. You can read more about ESNI and ECH here: [[https://blog.cloudflare.com/encrypted-client-hello/]].
 
+
+** Server Hello
+
+When the TLS server is OK with the Client Hello, it will send back a ServerHello message to the client. The ServerHello includes (amongst other things) the following information:
+
+- TLS version selected by the server
+- Cipher used be the server
+- Server certificate and certificate chain
+- The list of acceptable client CAs
+
+*** TLS Client verifies Server Certificate (and Chain)
+
+The server presents a X509 certificate which the client inspects. Usually the client verifies the following:
+
+- is the /CN/ or the /Subject Alternative Names/ matching the server name to which the client connected
+- is the validity date range of the server certificate still valid
+- are the certificates from the certificate chain valid
+- can the client link the certificate chain to a certificate the client trusts
+
+In order to show the /CN/ and/or /Subject Alternative Names/ you can use the following command:
+
+#+begin_src shell
+openssl s_client -connect $SERVER:$PORT -servername $SERVER | openssl x509 -in - -text | egrep "Validity|Not Before|Not After|Subject:|Subject Alternative|DNS:"
+#+end_src
+
+Verify that the names mentioned in the /Subject Alternative Names/ section match the server name you are using to connect to. In case your client is validating that the presented name in the certificate matches the name used for establishing the connection it will abort if they differ. In case there is no /Subject Alternative Name/ present, then the name given in the /CN/ part of the distinguished name will used for the comparison.
+
+The client will also usually abort if the locale time of the client is not within the validity time range of the server certificate.
+
+The server will also transmit the issuer certificate chain which issued the server certificate. The client will verify if the current date is within the validity date range of the certificates of the chain.
+
+#+begin_src shell
+function tlsGetChain() {
+  SERVER=$1
+  PORT=$2
+  SERVERNAME="${3:-$SERVER}"
+
+  TMP_FILE=$(mktemp)
+  echo Q | openssl s_client -connect $SERVER:$PORT -servername $SERVER -showcerts > "${TMP_FILE}"
+  openssl crl2pkcs7 -nocrl -certfile "${TMP_FILE}" | openssl pkcs7 -print_certs -text -noout
+}
+
+tlsGetChain $SERVER $PORT | egrep "Certificate:|Validity|Not Before|Not After|Subject:|Subject Alternative|DNS:|Issuer:"
+#+end_src
+
+The TLS client can also verify the revocation state of the server certificate and the certificate chain presented. In order to do so, the client will query the /CRL/ (Certificate Revocation List) enpoint or use /OCSP/ (Online Certificate Status Protocol) as defined by the certificate issuer of the certificate. In order to see if a /CRL/ or /OCSP/ endpoint has been defined, you need to inspect the server certificate and server certificate chain:
+
+#+begin_src shell
+tlsGetChain $SERVER $PORT | egrep -i "Certificate:|Subject:|Issuer:|X509v3 CRL Distribution Points|crl|OCSP"
+#+end_src
+
+Please note that the above grep may miss CRL endpoints, in case they do not have a ~CRL~ in their name.
+
+OpensSSL can query the status of the certificates using CRLs in case we ask in to do so:
+
+#+begin_src shell
+echo Q | openssl s_client -connect $SERVER:$PORT -servername $SERVER -crl_check_all -crl_download | egrep "depth|Verify"
+#+end_src
+
+Usually TLS servers do not transmit the root CA of the chain as the client will have to establish the trust to this root CA on it's own anyway (see below). In such a case the above check will report an error that the CRL can not be downloaded for the root CA.
+
+Another verification that might be executed by a TLS client is to verify that the certificates purpose (e.g. TLS server, TLS client) is properly set. Again, OpenSSL can help to verify this:
+
+#+begin_src shell
+echo Q | openssl s_client -connect $SERVER:$PORT -servername $SERVER -purpose sslserver | grep "Verify return code"
+#+end_src
+
+which will return
+
+#+begin_example
+Verify return code: 0 (ok)
+#+end_example
+
+in case the purpose of the server certificate matches "TLS Web Server Authentication" or 
+
+#+begin_example
+Verify return code: 26 (unsupported certificate purpose)
+#+end_example
+
+otherwise.
+
+The issuing CAs have additional certificates set which designate if they are a CA and optionally if the certificates they issue are again allowed to become a CA (and up to which level this is allowed). Clients sometimes verify these settings as well.
+
+#+begin_src shell
+tlsGetChain $SERVER $PORT | egrep -i "Certificate:|Subject:|Issuer:|X509v3 Basic Constraints:|CA:(TRUE|FALSE)"
+#+end_src
+
+The client will also have to establish a trust relationship for the certificate/certificate-chain sent by the server. The client will usually try to complete the certificate chain sent by using it's local set of certificates which are trusted. In case the client can complete the chain up to a self-signed (and thus root) certificate, then the client is trusting the chain and ultimately the server certificate.
 
 /...to be continued.../
