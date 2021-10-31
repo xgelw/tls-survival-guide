@@ -212,7 +212,50 @@ echo Q | openssl s_client -connect $SERVER:$PORT -servername $SERVER -crl_check_
 
 Usually TLS servers do not transmit the root CA of the chain as the client will have to establish the trust to this root CA on it's own anyway (see below). In such a case the above check will report an error that the CRL can not be downloaded for the root CA.
 
-Another verification that might be executed by a TLS client is to verify that the certificates purpose (e.g. TLS server, TLS client) is properly set. Again, OpenSSL can help to verify this:
+Besides using a /CRL/ it's also possible that an /OCSP/ endpoint is defined for verifying the revocation status of a certificate. In order to do so, one must extract the /OCSP/ endpoint listed in the certificate (in case there is one defined) and then query this endpoint:
+
+#+begin_src shell
+function ocspVerification() {
+  SERVER=$1
+  PORT=$2
+  SERVERNAME="${3:-$SERVER}"
+
+  CERT_FILE=$(mktemp)
+  CHAIN_FILE=$(mktemp)
+  echo Q | openssl s_client -connect $SERVER:$PORT -servername $SERVER > "${CERT_FILE}"
+  echo Q | openssl s_client -connect $SERVER:$PORT -servername $SERVER -showcerts > "${CHAIN_FILE}"
+  nl -w2 -s': ' "${CHAIN_FILE}" > "${CHAIN_FILE}.ln"
+  LINE_SECOND_CERT=$(grep -m 2 "BEGIN CERTIFICATE-----" "${CHAIN_FILE}.ln" | tail -n 1 | sed -r 's/([0-9]):.*/\1/')
+  tail -n "+${LINE_SECOND_CERT}" "${CHAIN_FILE}" > "${CHAIN_FILE}.issuers"
+  
+  OCSP_URL=$(openssl x509 -in "${CERT_FILE}" -noout -ocsp_uri)
+  OCSP_HOST=$(echo "${OCSP_URL}" | sed -r 's!http[s]?://([^/]*)[/]?.*!\1!')
+
+  echo "OCSP URL: ${OCSP_URL}"
+  echo "OCSP HOST: ${OCSP_HOST}"
+  if [[ "${OCSP_URL}" != "" ]]; then
+    openssl ocsp -issuer "${CHAIN_FILE}.issuers" -cert "${CERT_FILE}" -text -header "Host=${OCSP_HOST}" -url "${OCSP_URL}"
+  else
+    echo "Unable to extract an OCSP endpoint from the certificate"
+  fi
+}
+
+ocspVerification $SERVER $PORT
+#+end_src
+
+You should see the OCSP request and the OCSP response:
+
+#+begin_example
+...
+OCSP Response Data:
+    OCSP Response Status: successful (0x0)
+    Response Type: Basic OCSP Response
+...
+    Cert Status: good
+...
+#+end_example
+
+Another verification that might be executed by a TLS client is to verify that the certificate`s purpose (e.g. TLS server, TLS client) is properly set. Again, OpenSSL can help to verify this:
 
 #+begin_src shell
 echo Q | openssl s_client -connect $SERVER:$PORT -servername $SERVER -purpose sslserver | grep "Verify return code"
