@@ -284,3 +284,25 @@ tlsGetChain $SERVER $PORT | egrep -i "Certificate:|Subject:|Issuer:|X509v3 Basic
 The client will also have to establish a trust relationship for the certificate/certificate-chain sent by the server. The client will usually try to complete the certificate chain sent by using it's local set of certificates which are trusted. In case the client can complete the chain up to a self-signed (and thus root) certificate, then the client is trusting the chain and ultimately the server certificate.
 
 /...to be continued.../
+
+** Optionally: TLS Client Authentication
+
+During the /ServerHello/ then TLS server may send a list of /Acceptable Client CAs/. This list indicates to the client that it shall present a TLS client certificate issued by one on the CAs.
+
+The TLS Client now tries to select a matching TLS client certificate. The client may also select a TLS client certificate which was not issued by the provided CAs.
+
+Once the client has selected a TLS client certificate, it will send this certificate (amongst other things) to the TLS server. The client may send the issuing CA chain as part of this request to the server, so that the server can build a chain of trust.
+
+Upon receipt of the TLS client certificate, the server will now do the following verifications. Please note that the kind of verifications done are TLS server specific and very quite a log amongst TLS servers:
+
+- Can the TLS server build a chain of trust for the provided TLS client certificate? The chain might be build against a different trusted CA than presented as part of the /Acceptable Client CAs/.
+- The TLS server verifies that the TLS client certificates validity date range is still valid.
+- The TLS server verifies that the TLS client certificate contains the X509 attribute "TLS Client Authentication"
+- The TLS server verifies the revocation status by either using CRL or OCSP.
+- TLS servers may have an additional fine-grained allow-/block-list based on various attributes of the TLS client certificate
+
+* Wrapup
+
+The verifications described above usually accounted for most of the TLS handshake issues I've experienced it the past. Most of the time the root causes are easy to analyze: incorrect time of client or server; or the client doesn't trust the server certificate (or vice versa).
+
+You also will need to understand the specific configuration and validation options of the server and client components/libraries you are using. Some of them do more verifications than others. Most of the servers/clients I've seen in the past provide information in their logs why a TLS handshake failed, but most of the time these logs are now very verbose or such logs need to be enabled beforehand. In non-trivial cases a network capture of the TLS handshake will help a lot to diagnose the root cause. Wireshark does a great job of providing a human friendly rendering of the handshake.
