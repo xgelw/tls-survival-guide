@@ -225,7 +225,7 @@ function ocspVerification() {
   echo Q | openssl s_client -connect $SERVER:$PORT -servername $SERVER > "${CERT_FILE}"
   echo Q | openssl s_client -connect $SERVER:$PORT -servername $SERVER -showcerts > "${CHAIN_FILE}"
   nl -w2 -s': ' "${CHAIN_FILE}" > "${CHAIN_FILE}.ln"
-  LINE_SECOND_CERT=$(grep -m 2 "BEGIN CERTIFICATE-----" "${CHAIN_FILE}.ln" | tail -n 1 | sed -r 's/([0-9]):.*/\1/')
+  LINE_SECOND_CERT=$(grep -m 2 "BEGIN CERTIFICATE-----" "${CHAIN_FILE}.ln" | tail -n 1 | sed -r 's/^([0-9]+):.*/\1/')
   tail -n "+${LINE_SECOND_CERT}" "${CHAIN_FILE}" > "${CHAIN_FILE}.issuers"
   
   OCSP_URL=$(openssl x509 -in "${CERT_FILE}" -noout -ocsp_uri)
