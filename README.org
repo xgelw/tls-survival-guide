@@ -301,6 +301,6 @@ Upon receipt of the TLS client certificate, the server will now do the following
 
 * Wrapup
 
-The verifications described above usually accounted for most of the TLS handshake issues I've experienced it the past. Most of the time the root causes are easy to analyze: incorrect time of client or server; or the client doesn't trust the server certificate (or vice versa).
+The verifications described above usually accounted for most of the TLS handshake issues I've experienced it the past. Most of the time the root causes are easy to analyze: incorrect time of client or server; the servern name the client uses to connect to the server is not listed by the server certificate returned; or the client doesn't trust the server certificate (or vice versa).
 
 You also will need to understand the specific configuration and validation options of the server and client components/libraries you are using. Some of them do more verifications than others. Most of the servers/clients I've seen in the past provide information in their logs why a TLS handshake failed, but most of the time these logs are now very verbose or such logs need to be enabled beforehand. In non-trivial cases a network capture of the TLS handshake will help a lot to diagnose the root cause. Wireshark does a great job of providing a human friendly rendering of the handshake.
