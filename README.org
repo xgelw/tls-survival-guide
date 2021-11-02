@@ -283,8 +283,6 @@ tlsGetChain $SERVER $PORT | egrep -i "Certificate:|Subject:|Issuer:|X509v3 Basic
 
 The client will also have to establish a trust relationship for the certificate/certificate-chain sent by the server. The client will usually try to complete the certificate chain sent by using it's local set of certificates which are trusted. In case the client can complete the chain up to a self-signed (and thus root) certificate, then the client is trusting the chain and ultimately the server certificate.
 
-/...to be continued.../
-
 ** Optionally: TLS Client Authentication
 
 During the /ServerHello/ then TLS server may send a list of /Acceptable Client CAs/. This list indicates to the client that it shall present a TLS client certificate issued by one on the CAs.
